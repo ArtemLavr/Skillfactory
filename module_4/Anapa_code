@@ -1,0 +1,58 @@
+with anapa_flights  as (SELECT flts.*,
+arpt1.city departure_city,
+arpt2.city arrival_city,
+extract(epoch from (actual_arrival - actual_departure))/60 flight_duration_minutes
+FROM dst_project.flights flts
+join dst_project.airports arpt1 on flts.departure_airport = arpt1.airport_code
+join dst_project.airports arpt2 on flts.arrival_airport = arpt2.airport_code
+WHERE departure_airport = 'AAQ'
+  AND (date_trunc('month', scheduled_departure) in ('2017-01-01','2017-02-01', '2017-12-01'))
+  AND status not in ('Cancelled')
+),
+
+actual_amount as (SELECT 
+an_fl.flight_id fl_id,
+count(t_f.ticket_no) act_seat_cout,
+sum(t_f.amount) act_amount
+FROM anapa_flights an_fl
+join dst_project.ticket_flights t_f on an_fl.flight_id=t_f.flight_id
+group by an_fl.flight_id),
+
+flight_duration as(
+SELECT
+flts.flight_id fl_id,
+extract(epoch from (flts.actual_arrival-flts.actual_departure))/60 flight_duration_minutes
+FROM
+dst_project.flights flts
+WHERE departure_airport = 'AAQ'
+  AND (date_trunc('month', scheduled_departure) in ('2017-01-01','2017-02-01', '2017-12-01'))
+  AND status not in ('Cancelled')
+),
+
+total_seats as (SELECT
+an_fl.flight_id fl_id, 
+count(st.seat_no) total_seat_count
+FROM anapa_flights an_fl
+join dst_project.seats st on an_fl.aircraft_code = st.aircraft_code
+group by an_fl.flight_id)
+
+SELECT 
+act_am.fl_id flight_id,
+act_am.act_seat_cout,
+act_am.fl_id flight_id,
+a_f.departure_city,
+a_f.arrival_city,
+a_f.aircraft_code,
+t_s.total_seat_count,
+(act_am.act_seat_cout::numeric/t_s.total_seat_count) as prctg_occupied_seats,
+a_f.flight_duration_minutes
+FROM
+actual_amount act_am
+join total_seats t_s on act_am.fl_id = t_s.fl_id
+join anapa_flights a_f on act_am.fl_id = a_f.flight_id 
+order by prctg_occupied_seats
+ 
+
+
+
+
